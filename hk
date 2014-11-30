@@ -1,0 +1,204 @@
+#!/bin/bash
+workingdir=`mktemp -d`
+currentdir=`pwd`
+ARGS=
+cd $workingdir
+
+doIt() {
+	CMD="$@"
+	echo "$CMD" >> /tmp/HASKELL_SCRIPT_CACHE
+	FILE1=`echo $CMD | cut -f2 -d' '`
+	DIRNAME=`echo $FILE1 | sed 's#\(.*\)\/main.hs#\1#'`
+
+	pushd $currentdir > /dev/null
+	eval $CMD 2>&1 | tee $DIRNAME/OUTPUT
+	SUCCESS=${PIPESTATUS[0]}
+	popd > /dev/null
+	if [ "$SUCCESS" -ne 0 ]; then
+		echo ""
+		echo "   $ hk -e"
+		echo ""
+		echo "   ^^ The above command will let you edit and run again."
+	fi
+	echo "" >> $FILE1
+	MAIN=`sed -n '/^main/,/^$/{s/.*/--     \0/;p}' $FILE1`
+	echo "$MAIN" >> $FILE1
+	echo "--" >> $FILE1
+	echo "-- COMMAND LINE: $CMD" >> $FILE1
+	echo "--" >> $FILE1
+	echo "-- OUTPUT:" >> $FILE1
+	echo "--" >> $FILE1
+	cat $DIRNAME/OUTPUT | sed 's/.*/-- \0/' >> $FILE1
+
+	return $SUCCESS
+}
+
+usage() {
+	echo "USAGE: hk [OPTIONS] [CODE]"
+	echo ""
+	echo "hk facilitates running some quick haskell at your shell prompt"
+	echo ""
+	echo "The type of CODE can be an IO type or anything for which there is"
+        echo "a Show instance. If unsure, try something and then just run hk -e to see"
+	echo "the actual program in vim or the editor indicated by the EDITOR"
+	echo "environment variable. Remember to observe the quoting rules of your shell;"
+	echo "for example, in bash, you probably want to enclose CODE in single quotes."
+	echo ""
+	echo "OPTIONS:"
+	echo "  -e       Edit the last script and then run it in current directory"
+	echo "  -d       Dump last script to stdout"
+	echo "  -p CODE  Pipe mode, apply CODE to contents of stdin"
+	echo "  -h       This help screen"
+	echo ""
+	echo "EXAMPLES:"
+	echo "  Assuming Bash quoting rules:"
+	echo ""
+	echo "  # Use hk as a calculator"
+	echo "	$ hk sum [1..10]/5"
+	echo "	11.0"
+	echo ""
+	echo "  # Sum numbers in file 'Nums'"
+	echo "	$ hk 'readFile \"Nums\" >>= print . sum . map read . lines'"
+	echo "	1123"
+	echo ""
+	echo "  # Alternative to above using pipe"
+	echo "	$ cat Nums | hk -p 'sum . map read . lines' "
+	echo "	1123"
+        echo ""
+	echo "  # If getArgs occurs in first parameter, then interpret the rest as command line arguments"
+	echo "	$ hk 'getArgs>>= print . sum . map read' 1000 100 20 3"
+	echo "	1123"
+        echo ""
+	echo "  # Note: -p is only for convenience, it may be preferable to call getContents explicitly"
+	echo "	$ echo -e \"ok\\nthen\\nsome\" | hk 'liftM2 zip getArgs (fmap lines getContents)' arg1 arg2 arg3"
+	echo "	[(\"arg1\",\"ok\"),(\"arg2\",\"then\"),(\"arg3\",\"some\")]"
+
+}
+
+newscript(){
+	CODE="$@"
+
+# REMAINDER OF FILE IN ELSE BLOCK
+
+cat > main.hs <<HASKELL
+module Main where
+
+import Data.List
+import Control.Applicative
+import Control.Monad
+import Data.Maybe
+import System.Environment
+import System.IO
+import System.Directory
+
+main :: IO ()
+HASKELL
+
+
+ghci > TYPE0 << GHCI
+import Data.List
+import Control.Applicative
+import Control.Monad
+import Data.Maybe
+import System.Environment
+import System.IO
+import System.Directory
+:type ($CODE)
+GHCI
+
+tail -n-2 TYPE0 | head -n1 > TYPE2
+
+TYPE=`cat TYPE2 | tr '\n' ' '| sed 's/.* :: //'`
+
+if [[ "$TYPE" =~  IO ]]; then
+	if [ "$TYPE" = "IO () " ]; then 
+		echo "main = $CODE" >> main.hs
+	else
+		echo "main = $CODE >>= print" >> main.hs
+	fi
+else
+	echo "main = print $ $CODE" >> main.hs
+fi
+
+COMMAND="runghc $workingdir/main.hs $ARGS"
+doIt "$COMMAND"
+}
+if [ "$1" = "-e" ]; then 
+	COMMAND=`tail -n-1 /tmp/HASKELL_SCRIPT_CACHE`
+	FILE0=`tail -n-1 /tmp/HASKELL_SCRIPT_CACHE | cut -f2 -d' '`
+	if [[ -n "$EDITOR" ]]; then
+		eval "$EDITOR $FILE0"
+	else
+		vim $FILE0
+	fi
+	shift
+	ARGS=${*:2}
+	doIt "$COMMAND"
+elif [ "$1" = "-d" ]; then 
+	COMMAND=`tail -n-1 /tmp/HASKELL_SCRIPT_CACHE`
+	FILE0=`tail -n-1 /tmp/HASKELL_SCRIPT_CACHE | cut -f2 -d' '`
+	cat $FILE0
+elif [ "$1" = "-h" ]; then
+	usage
+elif [ "$1" = "" ]; then
+	usage
+elif [ "$1" = "-p" ]; then
+	shift
+	if [[ "$1" =~ "getArgs" ]]; then
+		ARGS=${*:2}
+		CODE="$1"
+	else
+		ARGS=
+		CODE="$@"
+	fi
+	ghci > TYPE0 << GHCI
+import Data.List
+import Control.Applicative
+import Control.Monad
+import Data.Maybe
+import System.Environment
+import System.IO
+:type ($CODE)
+GHCI
+
+	cat -n TYPE0
+	tail -n-2 TYPE0 | head -n1 > TYPE2
+	cat -n TYPE2
+
+	TYPE=`cat TYPE2 | tr '\n' ' '| sed 's/.* :: //'`
+	echo "DEBUG: TYPE=$TYPE"
+
+	if [[ "$TYPE" =~  IO ]]; then
+		if [ "$TYPE" = "String -> IO () " ]; then 
+			newscript "getContents >>=" "$CODE"
+		elif [[ "$TYPE" =~ "[String] -> IO ()" ]]; then 
+			newscript "getContents >>=" "($CODE) . lines"
+		elif [[ "$TYPE" =~ "[String] -> IO" ]]; then 
+			newscript "getContents >>=" "($CODE) . lines >>= print"
+		elif [[ "$TYPE" =~ "]] -> IO ()" ]]; then
+			newscript "getContents >>=" "($CODE) . lines"
+		elif [[ "$TYPE" =~ "]] -> IO " ]]; then
+			newscript "getContents >>=" "($CODE) . lines >>= print"
+		else
+			newscript "getContents >>= $CODE >>= print"
+		fi
+	else
+		if [[ "$TYPE" =~ "[String] ->" ]]; then
+			newscript "getContents >>= print . " "($CODE) . lines"
+		elif [[ "$TYPE" =~ "]] ->" ]]; then
+			echo "XX"
+			newscript "getContents >>= print . " "($CODE) . lines"
+		else
+			newscript "getContents >>= print . " "$CODE"
+		fi
+	fi
+else
+	if [[ "$1" =~ "getArgs" ]]; then
+		ARGS=${*:2}
+		CODE="$1"
+	else
+		ARGS=
+		CODE="$@"
+	fi
+	newscript "$CODE"
+fi
