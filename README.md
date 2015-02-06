@@ -1,3 +1,5 @@
+WARNING: the scripts are copied to an unprotected file under tmp, do not embed passwords etc. in them.
+
 hk
 ==
 
