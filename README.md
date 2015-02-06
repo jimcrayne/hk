@@ -1,4 +1,4 @@
-WARNING: the scripts are copied to an unprotected file under tmp, do not embed passwords etc. in them.
+Reminder: It is not especially secure to put sensitive information such as passwords on the command line regardless of the tool. If you need to input such things to your scripts, the secure way it is to use stdin.
 
 hk
 ==
