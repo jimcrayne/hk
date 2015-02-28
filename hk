@@ -2,6 +2,7 @@
 workingdir=`mktemp -d`
 currentdir=`pwd`
 ARGS=
+USE_XMSG=false
 cd $workingdir
 
 doIt() {
@@ -19,7 +20,10 @@ doIt() {
 		echo "   $ hk -e"
 		echo ""
 		echo "   ^^ The above command will let you edit and run again."
-	fi
+	elif [ "$USE_XMSG" = true ]; then
+		xmessage -file "$DIRNAME/OUTPUT"
+	fi	
+		
 	echo "" >> $FILE1
 	MAIN=`sed -n '/^main/,/^$/{s/.*/--     \0/;p}' $FILE1`
 	echo "$MAIN" >> $FILE1
@@ -48,6 +52,7 @@ usage() {
 	echo "  -e       Edit the last script and then run it in current directory"
 	echo "  -d       Dump last script to stdout"
 	echo "  -p CODE  Pipe mode, apply CODE to contents of stdin"
+	echo "  -x CODE  Show result of CODE using xmessage"
 	echo "  -h       This help screen"
 	echo ""
 	echo "EXAMPLES:"
@@ -84,6 +89,8 @@ cat > main.hs <<HASKELL
 module Main where
 
 import Data.List
+import Data.Char
+import Text.Printf
 import Control.Applicative
 import Control.Monad
 import Data.Maybe
@@ -97,6 +104,8 @@ HASKELL
 
 ghci > TYPE0 << GHCI
 import Data.List
+import Data.Char
+import Text.Printf
 import Control.Applicative
 import Control.Monad
 import Data.Maybe
@@ -153,6 +162,8 @@ elif [ "$1" = "-p" ]; then
 	fi
 	ghci > TYPE0 << GHCI
 import Data.List
+import Data.Char
+import Text.Printf
 import Control.Applicative
 import Control.Monad
 import Data.Maybe
@@ -193,6 +204,10 @@ GHCI
 		fi
 	fi
 else
+	if [ "$1" = "-x" ]; then 
+		shift
+		USE_XMSG=true
+	fi
 	if [[ "$1" =~ "getArgs" ]]; then
 		ARGS=${*:2}
 		CODE="$1"
