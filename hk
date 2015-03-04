@@ -204,16 +204,26 @@ GHCI
 		fi
 	fi
 else
-	if [ "$1" = "-x" ]; then 
+	while [[ "$1" == "-"* ]]; do
+		if [ "$1" = "-x" ]; then 
+			USE_XMSG=true
+                else
+		       	echo "Unrecognized option: $1"
+			DO_QUIT=true
+		fi
 		shift
-		USE_XMSG=true
-	fi
-	if [[ "$1" =~ "getArgs" ]]; then
-		ARGS=${*:2}
-		CODE="$1"
+	done
+
+	if [ "$DO_QUIT" = true ]; then 
+		echo 'Use -h for help.'
 	else
-		ARGS=
-		CODE="$@"
+		if [[ "$1" =~ "getArgs" ]]; then
+			ARGS=${*:2}
+			CODE="$1"
+		else
+			ARGS=
+			CODE="$@"
+		fi
+		newscript "$CODE"
 	fi
-	newscript "$CODE"
 fi
