@@ -1,5 +1,5 @@
 #!/bin/bash
-workingdir=`mktemp -d`
+workingdir=`mktemp --tmpdir -d hk.XXXXXXXXXX`
 currentdir=`pwd`
 ARGS=
 USE_XMSG=false
