@@ -1,5 +1,3 @@
-Reminder: It is not especially secure to put sensitive information such as passwords on the command line regardless of the tool. If you need to input such things to your scripts, the secure way it is to use stdin.
-
 hk
 ==
 
@@ -23,6 +21,8 @@ OPTIONS:
   -d       Dump last script to stdout
 
   -p CODE  Pipe mode, apply CODE to contents of stdin
+
+  -x CODE  Show result of CODE using xmessage
 
   -h       This help screen
 
